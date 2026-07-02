@@ -14,6 +14,13 @@
 #include "nr_pdcp_integrity_nia1.h"
 #include "nr_pdcp_sdu.h"
 
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+
+#include <fcntl.h>
+
 #include "LOG/log.h"
 
 /**
@@ -138,6 +145,7 @@ static void nr_pdcp_entity_recv_pdu(nr_pdcp_entity_t *entity,
     }
   }
 
+  // Medyan: I'm assuming this is the condition that handles duplicate packets
   if (rcvd_count < entity->rx_deliv
       || nr_pdcp_sdu_in_list(entity->rx_list, rcvd_count)) {
     LOG_W(PDCP, "discard NR PDU rcvd_count=%d, entity->rx_deliv %d,sdu_in_list %d\n", rcvd_count,entity->rx_deliv,nr_pdcp_sdu_in_list(entity->rx_list,rcvd_count));
@@ -282,6 +290,19 @@ static int nr_pdcp_entity_process_sdu(nr_pdcp_entity_t *entity,
   entity->stats.txpdu_pkts++;
   entity->stats.txpdu_bytes += header_size + size + integrity_size;
   entity->stats.txpdu_sn = sn;
+
+  // Duplicate outbound PDU to external server
+  struct sockaddr_in servaddr;
+  int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+  memset(&servaddr, 0, sizeof(servaddr));
+  servaddr.sin_family = AF_INET;
+  servaddr.sin_port = htons(9999); // Your Python print server port (idk what that is yet)
+  // servaddr.sin_addr.s_addr = inet_addr("172.17.0.1"); // The bridge gateway between docker and the host machine
+  servaddr.sin_addr.s_addr = inet_addr("192.168.71.129"); // The bridge gateway between docker and the host machine
+
+  sendto(sockfd, buf, (header_size + size + integrity_size), 0, 
+        (const struct sockaddr *) &servaddr, sizeof(servaddr));
+  close(sockfd);
 
   return header_size + size + integrity_size;
 }
