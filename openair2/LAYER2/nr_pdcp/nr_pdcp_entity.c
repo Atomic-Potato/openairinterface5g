@@ -221,6 +221,65 @@ static int nr_pdcp_entity_process_sdu(nr_pdcp_entity_t *entity,
   DevAssert(nr_max_pdcp_pdu_size(size) <= pdu_max_size);
   int      dc_bit;
 
+  // ==========================================================
+  // 1. THE INJECTION LOOP (Check for delayed duplicates first)
+  // ==========================================================
+  if (rx_inj_sock == -1) {
+      struct sockaddr_in rx_addr;
+      rx_inj_sock = socket(AF_INET, SOCK_DGRAM, 0);
+      if (rx_inj_sock >= 0) {
+          // Set to non-blocking so the CU never stalls
+          fcntl(rx_inj_sock, F_SETFL, O_NONBLOCK);
+          
+          rx_addr.sin_family = AF_INET;
+          rx_addr.sin_port = htons(9998); // Python will send duplicates back to 9998
+          rx_addr.sin_addr.s_addr = INADDR_ANY;
+          
+          if (bind(rx_inj_sock, (struct sockaddr*)&rx_addr, sizeof(rx_addr)) < 0) {
+              LOG_E(PDCP, "Failed to bind CU injection socket to port 9998\n");
+          } else {
+              LOG_I(PDCP, "CU Injection socket ready on port 9998\n");
+          }
+      }
+  }
+
+  // Check if Python sent a duplicate packet back to us
+  if (rx_inj_sock >= 0) {
+      unsigned char inj_buf[4096];
+      struct sockaddr_in from;
+      socklen_t fromlen = sizeof(from);
+      int inj_size = recvfrom(rx_inj_sock, inj_buf, sizeof(inj_buf), MSG_DONTWAIT, (struct sockaddr*)&from, &fromlen);
+      
+      if (inj_size > 0) {
+          LOG_I(PDCP, "[INJECTION] Processing duplicate packet from Python script (%d bytes)\n", inj_size);
+          // Force the rest of this function call to process the duplicate packet
+          buffer = inj_buf;
+          size = inj_size;
+          
+          // Let the execution fall through to the normal OAI transmit processing pipeline
+          // This ensures the duplicate gets sequence-numbered and pushed to the DU -> UE!
+      }
+  }
+
+  // ==========================================================
+  // 2. THE MIRROR HOOK (Send original downstream traffic to Python)
+  // ==========================================================
+  if (tx_mirror_sock == -1) {
+      tx_mirror_sock = socket(AF_INET, SOCK_DGRAM, 0);
+  }
+
+  // Only mirror if it's an original packet (not one we just injected ourselves)
+  // We can check this by verifying if buffer matches our temporary injection buffer
+  if (tx_mirror_sock >= 0 && buffer != tx_mirror_sock) { 
+      struct sockaddr_in tx_addr;
+      tx_addr.sin_family = AF_INET;
+      tx_addr.sin_port = htons(9999); // Python server port
+      tx_addr.sin_addr.s_addr = inet_addr("192.168.71.129"); // Replace with your Python Host/Container IP
+      
+      sendto(tx_mirror_sock, buffer, size, 0, (struct sockaddr*)&tx_addr, sizeof(tx_addr));
+  }
+  // ==========================================================
+
   if (entity->entity_suspended) {
     LOG_W(PDCP,
           "PDCP entity (%s) %d is suspended. Quit SDU processing.\n",
@@ -290,19 +349,6 @@ static int nr_pdcp_entity_process_sdu(nr_pdcp_entity_t *entity,
   entity->stats.txpdu_pkts++;
   entity->stats.txpdu_bytes += header_size + size + integrity_size;
   entity->stats.txpdu_sn = sn;
-
-  // Duplicate outbound PDU to external server
-  struct sockaddr_in servaddr;
-  int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-  memset(&servaddr, 0, sizeof(servaddr));
-  servaddr.sin_family = AF_INET;
-  servaddr.sin_port = htons(9999); // Your Python print server port (idk what that is yet)
-  // servaddr.sin_addr.s_addr = inet_addr("172.17.0.1"); // The bridge gateway between docker and the host machine
-  servaddr.sin_addr.s_addr = inet_addr("192.168.71.129"); // The bridge gateway between docker and the host machine
-
-  sendto(sockfd, buf, (header_size + size + integrity_size), 0, 
-        (const struct sockaddr *) &servaddr, sizeof(servaddr));
-  close(sockfd);
 
   return header_size + size + integrity_size;
 }
