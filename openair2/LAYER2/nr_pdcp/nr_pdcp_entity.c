@@ -16,6 +16,11 @@
 
 #include "LOG/log.h"
 
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+
 /**
  * @brief returns the maximum PDCP PDU size
  *        which corresponds to data PDU for DRBs with 18 bits PDCP SN
@@ -282,6 +287,32 @@ static int nr_pdcp_entity_process_sdu(nr_pdcp_entity_t *entity,
   entity->stats.txpdu_pkts++;
   entity->stats.txpdu_bytes += header_size + size + integrity_size;
   entity->stats.txpdu_sn = sn;
+
+  LOG_D(PDCP, "Compile confirmations: #1");
+
+  /* ========================================================
+   * CUSTOM HOOK: DUPLICATE AND FORWARD OUT-OF-BAND
+   * ======================================================== */
+  int pdu_length = header_size + size + integrity_size;
+  
+  // Only forward data packets (e.g., DRBs) if you want to avoid control plane signaling
+  if (entity->is_gnb && (entity->type == NR_PDCP_DRB_AM || entity->type == NR_PDCP_DRB_UM)) {
+      struct sockaddr_in delay_server_addr;
+      int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+      if (sockfd >= 0) {
+          memset(&delay_server_addr, 0, sizeof(delay_server_addr));
+          delay_server_addr.sin_family = AF_INET;
+          delay_server_addr.sin_port = htons(9999); // Port of your external delay server
+          delay_server_addr.sin_addr.s_addr = inet_addr("192.168.71.1"); // Target IP
+
+          // Send the duplicate copy out-of-band
+          sendto(sockfd, buf, pdu_length, 0, 
+                 (struct sockaddr *)&delay_server_addr, sizeof(delay_server_addr));
+          close(sockfd);
+          LOG_D(PDCP, "MEDYAN: Duplicated packet and sent");
+      }
+  }
+  /* ======================================================== */
 
   return header_size + size + integrity_size;
 }
