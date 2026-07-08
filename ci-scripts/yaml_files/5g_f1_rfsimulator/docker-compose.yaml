@@ -112,6 +112,7 @@ services:
             public_net:
                 ipv4_address: 192.168.71.150
         volumes:
+        #   - /home/patata/Documents/GitHub/openairinterface5g/cmake_targets/ran_build/build/nr-softmodem:/opt/oai-gnb/bin/nr-softmodem
           - ../../conf_files/neighbour-config.conf:/opt/oai-gnb/etc/neighbour-config.conf
           - ../../conf_files/gnb-cu.sa.band78.106prb.conf:/opt/oai-gnb/etc/gnb.conf
         healthcheck:
@@ -213,6 +214,10 @@ services:
         devices:
              - /dev/net/tun:/dev/net/tun
         volumes:
+            # - /home/patata/Documents/GitHub/openairinterface5g/cmake_targets/ran_build/build/nr-uesoftmodem:/opt/oai-nr-ue/bin/nr-uesoftmodem
+            # - /home/patata/Documents/GitHub/openairinterface5g/cmake_targets/ran_build/build/libtelnetsrv_5Gue.so:/usr/local/lib/libtelnetsrv_5Gue.so
+            # - /home/patata/Documents/GitHub/openairinterface5g/cmake_targets/ran_build/build/libtelnetsrv_ciUE.so:/usr/local/lib/libtelnetsrv_ciUE.so
+            # - /home/patata/Documents/GitHub/openairinterface5g/cmake_targets/ran_build/build/librfsimulator.so:/usr/local/lib/librfsimulator.so
             - ../../conf_files/nrue.uicc.conf:/opt/oai-nr-ue/etc/nr-ue.conf
         healthcheck:
             test: /bin/bash -c "pgrep nr-uesoftmodem"
