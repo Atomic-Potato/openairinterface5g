@@ -181,9 +181,12 @@ static void nr_pdcp_entity_recv_pdu(nr_pdcp_entity_t *entity,
       nr_pdcp_free_sdu(cur);
       count++;
     }
+
+    LOG_D(PDCP, "This is a test message to check correct compilation...");
+
     entity->rx_deliv = count;
     LOG_D(PDCP,
-          "%s: entity (%s) %d - rx_deliv = %d, rcvd_sn = %d \n",
+          "AHHHHHHHHHH %s: entity (%s) %d - rx_deliv = %d, rcvd_sn = %d \n",
           __func__,
           entity->type == NR_PDCP_DRB_AM ? "DRB" : "SRB",
           entity->rb_id,

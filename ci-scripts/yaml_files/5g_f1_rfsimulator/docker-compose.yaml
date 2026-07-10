@@ -94,7 +94,8 @@ services:
             retries: 5
 
     oai-cu:
-        image: ${REGISTRY-oaisoftwarealliance/}${GNB_IMG:-oai-gnb}:${TAG:-develop}
+        # MEDYAN: Changed to use my freshly compiled code always 
+        image: oai-gnb:latest
         container_name: rfsim5g-oai-cu
         cap_drop:
             - ALL
@@ -190,7 +191,8 @@ services:
             retries: 5
 
     oai-nr-ue:
-        image: ${REGISTRY-oaisoftwarealliance/}${NRUE_IMG:-oai-nr-ue}:${TAG:-develop}
+        # MEDYAN: Changed to use my freshly compiled code always 
+        image: oai-nr-ue:latest
         container_name: rfsim5g-oai-nr-ue
         cap_drop:
             - ALL
